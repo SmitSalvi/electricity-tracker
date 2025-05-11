@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Electricity Unit Tracker - Made by SmitSwarup</title>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    :root {
+      --bg-light: #f5f5f5;
+      --text-light: #333;
+      --bg-dark: #121212;
+      --text-dark: #eee;
+    }
+
+    [data-theme="light"] {
+      background-color: var(--bg-light);
+      color: var(--text-light);
+    }
+
+    [data-theme="dark"] {
+      background-color: var(--bg-dark);
+      color: var(--text-dark);
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      padding: 1rem;
+      margin: 0;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    th, td {
+      padding: 0.5rem;
+      border: 1px solid #ccc;
+      text-align: center;
+      font-size: 0.9rem;
+    }
+
+    button {
+      margin: 0.3rem;
+      padding: 0.5rem 0.8rem;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    .form-input {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      max-width: 300px;
+    }
+
+    input[type="number"] {
+      padding: 0.5rem;
+      font-size: 1rem;
+    }
+
+    #summaryPage {
+      display: none;
+    }
+
+    @media (max-width: 600px) {
+      th, td {
+        font-size: 0.75rem;
+      }
+
+      button {
+        font-size: 0.9rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Electricity Import/Export Tracker</h1>
+
+  <button id="themeToggle">Toggle Theme</button>
+  <button id="mainPageBtn">Main Page</button>
+  <button id="summaryPageBtn">Summary</button>
+  <button id="pdfExport">Export to PDF</button>
+
+  <div id="mainPage">
+    <div class="form-input">
+      <input type="number" id="import" placeholder="Import (kWh)" />
+      <input type="number" id="export" placeholder="Export (kWh)" />
+      <button id="addEntry">Add Entry</button>
+    </div>
+
+    <table id="dataTable">
+      <thead>
+        <tr>
+          <th>Date & Time</th>
+          <th>Import (kWh)</th>
+          <th>Export (kWh)</th>
+          <th>Extra Units</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div id="summaryPage">
+    <h2>Summary</h2>
+    <table>
+      <tr><th>Total Import</th><td id="totalImport"></td></tr>
+      <tr><th>Total Export</th><td id="totalExport"></td></tr>
+      <tr><th>Difference</th><td id="totalDifference"></td></tr>
+    </table>
+  </div>
+
+  <script defer>
+    document.addEventListener("DOMContentLoaded", function () {
+      const tableBody = document.querySelector("#dataTable tbody");
+      const importInput = document.getElementById("import");
+      const exportInput = document.getElementById("export");
+      const mainPage = document.getElementById("mainPage");
+      const summaryPage = document.getElementById("summaryPage");
+      const totalImportEl = document.getElementById("totalImport");
+      const totalExportEl = document.getElementById("totalExport");
+      const totalDifferenceEl = document.getElementById("totalDifference");
+
+      let entries = JSON.parse(localStorage.getItem("entries") || "[]");
+      renderEntries();
+
+      document.getElementById("themeToggle").addEventListener("click", toggleTheme);
+      document.getElementById("mainPageBtn").addEventListener("click", showMainPage);
+      document.getElementById("summaryPageBtn").addEventListener("click", showSummaryPage);
+      document.getElementById("addEntry").addEventListener("click", addEntry);
+      document.getElementById("pdfExport").addEventListener("click", exportPDF);
+
+      function toggleTheme() {
+        const currentTheme = document.documentElement.getAttribute("data-theme");
+        const newTheme = currentTheme === "light" ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", newTheme);
+      }
+
+      function addEntry() {
+        const importVal = parseFloat(importInput.value);
+        const exportVal = parseFloat(exportInput.value);
+        if (isNaN(importVal) || isNaN(exportVal)) {
+          alert("Please enter valid numbers for both import and export.");
+          return;
+        }
+        const datetime = new Date().toLocaleString();
+        const extraUnits = exportVal - importVal;
+        const entry = { datetime, importVal, exportVal, extraUnits };
+        entries.push(entry);
+        localStorage.setItem("entries", JSON.stringify(entries));
+        renderEntries();
+        importInput.value = "";
+        exportInput.value = "";
+      }
+
+      function renderEntries() {
+        tableBody.innerHTML = "";
+        entries.forEach((entry, index) => {
+          const row = tableBody.insertRow();
+          row.innerHTML = `
+            <td>${entry.datetime}</td>
+            <td>${entry.importVal}</td>
+            <td>${entry.exportVal}</td>
+            <td>${entry.extraUnits}</td>
+            <td>
+              <button onclick="editEntry(${index})">Edit</button>
+              <button onclick="deleteEntry(${index})">Delete</button>
+            </td>
+          `;
+        });
+      }
+
+      window.editEntry = function (index) {
+        const entry = entries[index];
+        const datetime = prompt("Edit Date & Time:", entry.datetime);
+        const importVal = parseFloat(prompt("Edit Import (kWh):", entry.importVal));
+        const exportVal = parseFloat(prompt("Edit Export (kWh):", entry.exportVal));
+        if (datetime && !isNaN(importVal) && !isNaN(exportVal)) {
+          entries[index] = {
+            datetime,
+            importVal,
+            exportVal,
+            extraUnits: exportVal - importVal
+          };
+          localStorage.setItem("entries", JSON.stringify(entries));
+          renderEntries();
+        }
+      };
+
+      window.deleteEntry = function (index) {
+        entries.splice(index, 1);
+        localStorage.setItem("entries", JSON.stringify(entries));
+        renderEntries();
+      };
+
+      function showSummaryPage() {
+        mainPage.style.display = "none";
+        summaryPage.style.display = "block";
+
+        let totalImport = 0;
+        let totalExport = 0;
+
+        entries.forEach(e => {
+          totalImport += e.importVal;
+          totalExport += e.exportVal;
+        });
+
+        totalImportEl.textContent = totalImport + ' kWh';
+        totalExportEl.textContent = totalExport + ' kWh';
+        totalDifferenceEl.textContent = (totalExport - totalImport) + ' kWh';
+      }
+
+      function showMainPage() {
+        mainPage.style.display = "block";
+        summaryPage.style.display = "none";
+      }
+
+      function exportPDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        doc.setFontSize(16);
+        doc.text("Electricity Unit Tracker Summary", 10, 10);
+        doc.setFontSize(12);
+
+        let y = 20;
+        entries.forEach((e, i) => {
+          doc.text(`${i + 1}. ${e.datetime} - Import: ${e.importVal} kWh, Export: ${e.exportVal} kWh, Extra: ${e.extraUnits} kWh`, 10, y);
+          y += 8;
+        });
+
+        const totalImport = entries.reduce((a, b) => a + b.importVal, 0);
+        const totalExport = entries.reduce((a, b) => a + b.exportVal, 0);
+        const totalDiff = totalExport - totalImport;
+
+        y += 10;
+        doc.text(`Total Import: ${totalImport} kWh`, 10, y);
+        y += 8;
+        doc.text(`Total Export: ${totalExport} kWh`, 10, y);
+        y += 8;
+        doc.text(`Difference: ${totalDiff} kWh`, 10, y);
+
+        doc.save("electricity_summary.pdf");
+      }
+    });
+  </script>
+</body>
+</html>
